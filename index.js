@@ -3,6 +3,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors")
 const authRoute = require("./routes/auth")
+const taskRoute = require("./routes/taskRoutes")
+const collabRoute = require("./routes/collabRoutes")
 
 
 const app = express();
@@ -11,6 +13,8 @@ app.use(cors());
 
 
 app.use("/auth",authRoute)
+app.use("/",taskRoute)
+app.use("/",collabRoute)
 
 
 app.get("/", (req,res)=>{

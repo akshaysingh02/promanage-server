@@ -57,22 +57,114 @@ const login = async (req, res, next) => {
     }
 
     //set token
-    var token = jwt.sign({ userId: userDetails._id }, process.env.SECRET_KEY, {
-      expiresIn: "60h",
-    });
+    var token = jwt.sign(
+      { userId: userDetails._id, emailId: userDetails.email },
+      process.env.SECRET_KEY,
+      {
+        expiresIn: "60h",
+      }
+    );
 
     res.json({
       message: "User Logged In",
       token: token,
       userId: userDetails._id,
       name: userDetails.name,
+      userEmail: userDetails.email,
     });
   } catch (error) {
-    console.log("Can't login",error);
+    console.log("Can't login", error);
+  }
+};
+
+const updateUserDetailsById = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ errorMessage: "User id is required" });
+    }
+
+    const { name, email, oldPassword, newPassword } = req.body;
+
+    // Check if user exists in the database
+    const userDetails = await User.findById(userId);
+    if (!userDetails) {
+      return res.status(404).json({ errorMessage: "Can't find user by id" });
+    }
+
+    // Update fields
+    let updateFields = {};
+
+    if (name) {
+      updateFields.name = name;
+    }
+
+    if (email) {
+      let formattedEmail = email.toLowerCase();
+      const isExistingUser = await User.findOne({ email: formattedEmail });
+      if (isExistingUser && isExistingUser._id.toString() !== userId) {
+        return res
+          .status(409)
+          .json({ errorMessage: "This email is already in use" });
+      }
+      updateFields.email = formattedEmail;
+    }
+
+    if (oldPassword && !newPassword) {
+      return res
+        .status(404)
+        .json({ errorMessage: "Please enter old and new password" });
+    }
+    if (!oldPassword && newPassword) {
+      return res
+        .status(404)
+        .json({ errorMessage: "Please enter old and new password" });
+    }
+
+    if (oldPassword && newPassword) {
+      // Check if old password is correct
+      const isPasswordMatched = await bcrypt.compare(
+        oldPassword,
+        userDetails.password
+      );
+      if (!isPasswordMatched) {
+        return res
+          .status(401)
+          .json({ errorMessage: "Old password is not correct" });
+      }
+
+      // Check if new and old password are different
+      if (newPassword === oldPassword) {
+        return res
+          .status(401)
+          .json({ errorMessage: "Old and new password can't be same" });
+      }
+
+      // Hash the new password
+      updateFields.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    // Check if there is at least one field to update
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ errorMessage: "No fields to update" });
+    }
+
+    await User.updateOne({ _id: userId }, { $set: updateFields });
+
+    res.json({
+      message: "User details updated successfully",
+      updatedFields: updateFields,
+    });
+  } catch (error) {
+    console.log("Can't update user details", error);
+    res
+      .status(500)
+      .json({ errorMessage: "Server error, please try again later" });
   }
 };
 
 module.exports = {
   signup,
   login,
+  updateUserDetailsById,
 };
