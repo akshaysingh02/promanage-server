@@ -163,8 +163,31 @@ const updateUserDetailsById = async (req, res) => {
   }
 };
 
+const getUserDetails = async (req, res) => {
+  try {
+    const userId = req.currentUserId;
+    if (!userId) {
+      return res.status(400).json({ errorMessage: "User id is required" });
+    }
+
+    const userDetails = await User.findById(userId);
+    if (!userDetails) {
+      return res.status(404).json({ errorMessage: "User not found" });
+    }
+
+    res.json({
+      name: userDetails.name,
+      email: userDetails.email
+    });
+  } catch (error) {
+    console.log("Can't fetch user details", error);
+    res.status(500).json({ errorMessage: "Server error, please try again later" });
+  }
+}
+
 module.exports = {
   signup,
   login,
   updateUserDetailsById,
+  getUserDetails
 };
