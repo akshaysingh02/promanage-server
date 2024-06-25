@@ -12,8 +12,8 @@ const createCollaborator = async (req, res) => {
     let formattedEmail = email.toLowerCase();
 
     //check for same email for collaborator in users account
-    const collabDetails = await Collaborator.findOne({ email: formattedEmail });
-    if (collabDetails) {
+    const collabDetails = await Collaborator.find({ email: formattedEmail, refUser: req.currentUserId });
+    if (collabDetails.length) {
       return res
         .status(409)
         .json({ errorMessage: "This email already exist as collaborator" });
