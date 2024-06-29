@@ -20,7 +20,7 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
-    checklist: [
+    checkList: [
       {
         item: {
           type: String,

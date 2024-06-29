@@ -5,9 +5,9 @@ const { v4: uuidv4 } = require("uuid");
 // Create a new task
 const createTask = async (req, res) => {
   try {
-    const { title, priority, dueDate, checklist, assignedTo } = req.body;
+    const { title, priority, dueDate, checkList, assignedTo } = req.body;
 
-    if (!title || !priority || !checklist) {
+    if (!title || !priority || !checkList) {
       return res.status(400).json({
         errorMessage: "please send title, priority, and checklist. Bad request",
       });
@@ -17,7 +17,7 @@ const createTask = async (req, res) => {
       title,
       priority,
       dueDate,
-      checklist,
+      checkList,
       refUser: req.currentUserId,
       assignedTo: assignedTo.toLowerCase(),
       uniqueLink,
@@ -43,9 +43,9 @@ const updateTaskDetailsById = async (req, res) => {
         errorMessage: "Bad request, can't get id for task to update",
       });
     }
-    const { title, priority, dueDate, checklist, assignedTo } = req.body;
+    const { title, priority, dueDate, checkList, assignedTo } = req.body;
 
-    if (!title || !priority || !checklist) {
+    if (!title || !priority || !checkList) {
       return res.status(400).json({
         errorMessage: "Bad request, can't get details from req body",
       });
@@ -82,8 +82,9 @@ const updateTaskDetailsById = async (req, res) => {
     task.title = title || task.title;
     task.priority = priority || task.priority;
     task.dueDate = dueDate || task.dueDate;
-    task.checklist = checklist || task.checklist;
-    task.assignedTo = assignedTo.toLowerCase() || task.assignedTo.toLowerCase();
+    task.checkList = checkList || task.checkList;
+    task.assignedTo =
+      assignedTo?.toLowerCase() || task?.assignedTo?.toLowerCase();
 
     const updatedTask = await task.save();
     res.json({
@@ -106,16 +107,21 @@ const deleteTaskById = async (req, res) => {
       });
     }
 
+    //check for ownership
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ error: "Task not found" });
     }
-
-    //check for ownership
-    if (userId.toString() !== task.refUser.toString()) {
-      return res
-        .status(403)
-        .json({ error: "You are not authorized to delete this task" });
+    if (task.refUser.toString() !== userId.toString()) {
+      if (req.currentUserEmail === null) {
+        return res.status(401).json({ message: "User not authorized" });
+      } else if (
+        task.assignedTo.toString() !== req.currentUserEmail.toString()
+      ) {
+        return res
+          .status(401)
+          .json({ message: "Task is not assigned to current user" });
+      }
     }
 
     await Task.findByIdAndDelete(taskId);
@@ -134,7 +140,7 @@ const getTaskForSharing = async (req, res) => {
     const { uniqueLink } = req.params;
     const task = await Task.findOne({ uniqueLink });
     if (!task) {
-      return res.status(404).json({ error: "Task not found" });
+      return res.status(404).json({ errorMessage: "Task not found" });
     }
     const taskData = task.toObject();
     res.json({ taskData });
@@ -166,7 +172,7 @@ const getTasks = async (req, res) => {
       let startDate;
 
       switch (filter) {
-        case 'today':
+        case "today":
           dateFilter = {
             createdAt: {
               $gte: new Date(currentDate.setHours(0, 0, 0, 0)),
@@ -174,7 +180,7 @@ const getTasks = async (req, res) => {
             },
           };
           break;
-        case 'this_week':
+        case "this_week":
           startDate = new Date(currentDate);
           startDate.setDate(currentDate.getDate() - 7);
           dateFilter = {
@@ -184,7 +190,7 @@ const getTasks = async (req, res) => {
             },
           };
           break;
-        case 'this_month':
+        case "this_month":
           startDate = new Date(currentDate);
           startDate.setDate(currentDate.getDate() - 30);
           dateFilter = {
@@ -200,7 +206,10 @@ const getTasks = async (req, res) => {
     }
 
     const tasks = await Task.find({ refUser: activeUserId, ...dateFilter });
-    const assignedTasks = await Task.find({ assignedTo: activeUserEmail, ...dateFilter });
+    const assignedTasks = await Task.find({
+      assignedTo: activeUserEmail,
+      ...dateFilter,
+    });
 
     res.json({ usersTasks: tasks, assignedTasks: assignedTasks });
   } catch (error) {
@@ -208,11 +217,11 @@ const getTasks = async (req, res) => {
   }
 };
 
-
 // Move task to another block
 const updateTaskStatus = async (req, res) => {
   try {
     const { taskId, newStatus } = req.body;
+    const userId = req.currentUserId;
 
     if (!taskId || !newStatus) {
       return res.status(400).json({
@@ -220,15 +229,26 @@ const updateTaskStatus = async (req, res) => {
       });
     }
 
-    const task = await Task.findById(taskId);
+    const task = await Task.findOne({ _id:taskId });
     if (!task) {
       return res.status(404).json({
         errorMessage: "Task not found.",
       });
     }
+    if(task.refUser.toString() !== userId.toString()){
+      if (req.currentUserEmail === null) {
+        return res.status(401).json({ message: "User not authorized" });
+      } else if (
+        task.assignedTo.toString() !== req.currentUserEmail.toString()
+      ) {
+        return res
+          .status(401)
+          .json({ message: "Task is not assigned to current user" });
+      }
+    }
 
     task.status = newStatus;
-    await task.save();
+    const result = await task.save();
 
     res.status(200).json({
       message: "Task status updated successfully",
@@ -295,7 +315,6 @@ const getTaskAnalytics = async (req, res) => {
   }
 };
 
-
 module.exports = {
   createTask,
   updateTaskDetailsById,
@@ -303,5 +322,5 @@ module.exports = {
   getTaskForSharing,
   getTasks,
   updateTaskStatus,
-  getTaskAnalytics
+  getTaskAnalytics,
 };
